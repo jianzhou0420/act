@@ -10,9 +10,9 @@ from einops import rearrange
 
 from constants import DT
 from constants import PUPPET_GRIPPER_JOINT_OPEN
-from utils import load_data # data functions
-from utils import sample_box_pose, sample_insertion_pose # robot functions
-from utils import compute_dict_mean, set_seed, detach_dict # helper functions
+from utils import load_data  # data functions
+from utils import sample_box_pose, sample_insertion_pose  # robot functions
+from utils import compute_dict_mean, set_seed, detach_dict  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
 from visualize_episodes import save_videos
 
@@ -20,6 +20,7 @@ from sim_env import BOX_POSE
 
 import IPython
 e = IPython.embed
+
 
 def main(args):
     set_seed(1)
@@ -67,8 +68,8 @@ def main(args):
                          'camera_names': camera_names,
                          }
     elif policy_class == 'CNNMLP':
-        policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone' : backbone, 'num_queries': 1,
-                         'camera_names': camera_names,}
+        policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone': backbone, 'num_queries': 1,
+                         'camera_names': camera_names, }
     else:
         raise NotImplementedError
 
@@ -174,13 +175,13 @@ def eval_bc(config, ckpt_name, save_episode=True):
     with open(stats_path, 'rb') as f:
         stats = pickle.load(f)
 
-    pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
-    post_process = lambda a: a * stats['action_std'] + stats['action_mean']
+    def pre_process(s_qpos): return (s_qpos - stats['qpos_mean']) / stats['qpos_std']
+    def post_process(a): return a * stats['action_std'] + stats['action_mean']
 
     # load environment
     if real_robot:
-        from aloha_scripts.robot_utils import move_grippers # requires aloha
-        from aloha_scripts.real_env import make_real_env # requires aloha
+        from aloha_scripts.robot_utils import move_grippers  # requires aloha
+        from aloha_scripts.real_env import make_real_env  # requires aloha
         env = make_real_env(init_node=True)
         env_max_reward = 0
     else:
@@ -193,45 +194,45 @@ def eval_bc(config, ckpt_name, save_episode=True):
         query_frequency = 1
         num_queries = policy_config['num_queries']
 
-    max_timesteps = int(max_timesteps * 1) # may increase for real-world tasks
+    max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
 
     num_rollouts = 50
     episode_returns = []
     highest_rewards = []
     for rollout_id in range(num_rollouts):
         rollout_id += 0
-        ### set task
+        # set task
         if 'sim_transfer_cube' in task_name:
-            BOX_POSE[0] = sample_box_pose() # used in sim reset
+            BOX_POSE[0] = sample_box_pose()  # used in sim reset
         elif 'sim_insertion' in task_name:
-            BOX_POSE[0] = np.concatenate(sample_insertion_pose()) # used in sim reset
+            BOX_POSE[0] = np.concatenate(sample_insertion_pose())  # used in sim reset
 
         ts = env.reset()
 
-        ### onscreen render
+        # onscreen render
         if onscreen_render:
             ax = plt.subplot()
             plt_img = ax.imshow(env._physics.render(height=480, width=640, camera_id=onscreen_cam))
             plt.ion()
 
-        ### evaluation loop
+        # evaluation loop
         if temporal_agg:
-            all_time_actions = torch.zeros([max_timesteps, max_timesteps+num_queries, state_dim]).cuda()
+            all_time_actions = torch.zeros([max_timesteps, max_timesteps + num_queries, state_dim]).cuda()
 
         qpos_history = torch.zeros((1, max_timesteps, state_dim)).cuda()
-        image_list = [] # for visualization
+        image_list = []  # for visualization
         qpos_list = []
         target_qpos_list = []
         rewards = []
         with torch.inference_mode():
             for t in range(max_timesteps):
-                ### update onscreen render and wait for DT
+                # update onscreen render and wait for DT
                 if onscreen_render:
                     image = env._physics.render(height=480, width=640, camera_id=onscreen_cam)
                     plt_img.set_data(image)
                     plt.pause(DT)
 
-                ### process previous timestep to get qpos and image_list
+                # process previous timestep to get qpos and image_list
                 obs = ts.observation
                 if 'images' in obs:
                     image_list.append(obs['images'])
@@ -243,12 +244,12 @@ def eval_bc(config, ckpt_name, save_episode=True):
                 qpos_history[:, t] = qpos
                 curr_image = get_image(ts, camera_names)
 
-                ### query policy
+                # query policy
                 if config['policy_class'] == "ACT":
                     if t % query_frequency == 0:
                         all_actions = policy(qpos, curr_image)
                     if temporal_agg:
-                        all_time_actions[[t], t:t+num_queries] = all_actions
+                        all_time_actions[[t], t:t + num_queries] = all_actions
                         actions_for_curr_step = all_time_actions[:, t]
                         actions_populated = torch.all(actions_for_curr_step != 0, axis=1)
                         actions_for_curr_step = actions_for_curr_step[actions_populated]
@@ -264,15 +265,15 @@ def eval_bc(config, ckpt_name, save_episode=True):
                 else:
                     raise NotImplementedError
 
-                ### post-process actions
+                # post-process actions
                 raw_action = raw_action.squeeze(0).cpu().numpy()
                 action = post_process(raw_action)
                 target_qpos = action
 
-                ### step the environment
+                # step the environment
                 ts = env.step(target_qpos)
 
-                ### for visualization
+                # for visualization
                 qpos_list.append(qpos_numpy)
                 target_qpos_list.append(target_qpos)
                 rewards.append(ts.reward)
@@ -283,7 +284,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
             pass
 
         rewards = np.array(rewards)
-        episode_return = np.sum(rewards[rewards!=None])
+        episode_return = np.sum(rewards[rewards != None])
         episode_returns.append(episode_return)
         episode_highest_reward = np.max(rewards)
         highest_rewards.append(episode_highest_reward)
@@ -295,7 +296,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
     avg_return = np.mean(episode_returns)
     summary_str = f'\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n'
-    for r in range(env_max_reward+1):
+    for r in range(env_max_reward + 1):
         more_or_equal_r = (np.array(highest_rewards) >= r).sum()
         more_or_equal_r_rate = more_or_equal_r / num_rollouts
         summary_str += f'Reward >= {r}: {more_or_equal_r}/{num_rollouts} = {more_or_equal_r_rate*100}%\n'
@@ -314,12 +315,14 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
 
 def forward_pass(data, policy):
+    # ZJA:data中有4个tensor，0：[8,1,3,480,640] 1:[8,1,14] 2:[8,400,14] 3:[8,400] bool,image_data, qpos_data, action_data, is_pad(在forwatd_pass中写了)
     image_data, qpos_data, action_data, is_pad = data
     image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
-    return policy(qpos_data, image_data, action_data, is_pad) # TODO remove None
+    return policy(qpos_data, image_data, action_data, is_pad)  # TODO remove None
 
 
 def train_bc(train_dataloader, val_dataloader, config):
+    # ZJA: 之前的都不用管
     num_epochs = config['num_epochs']
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
@@ -336,6 +339,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     validation_history = []
     min_val_loss = np.inf
     best_ckpt_info = None
+    # ZJA: 先算一个val的loss
     for epoch in tqdm(range(num_epochs)):
         print(f'\nEpoch {epoch}')
         # validation
@@ -359,9 +363,10 @@ def train_bc(train_dataloader, val_dataloader, config):
         print(summary_string)
 
         # training
-        policy.train()
+        policy.train()  # ZJA: set the model into training mode
         optimizer.zero_grad()
         for batch_idx, data in enumerate(train_dataloader):
+            # ZJA:data中有4个tensor，0：[8,1,3,480,640] 1:[8,1,14] 2:[8,400,14] 3:[8,400] bool,image_data, qpos_data, action_data, is_pad(在forwatd_pass中写了)
             forward_dict = forward_pass(data, policy)
             # backward
             loss = forward_dict['loss']
@@ -369,7 +374,7 @@ def train_bc(train_dataloader, val_dataloader, config):
             optimizer.step()
             optimizer.zero_grad()
             train_history.append(detach_dict(forward_dict))
-        epoch_summary = compute_dict_mean(train_history[(batch_idx+1)*epoch:(batch_idx+1)*(epoch+1)])
+        epoch_summary = compute_dict_mean(train_history[(batch_idx + 1) * epoch:(batch_idx + 1) * (epoch + 1)])
         epoch_train_loss = epoch_summary['loss']
         print(f'Train loss: {epoch_train_loss:.5f}')
         summary_string = ''
@@ -403,8 +408,8 @@ def plot_history(train_history, validation_history, num_epochs, ckpt_dir, seed):
         plt.figure()
         train_values = [summary[key].item() for summary in train_history]
         val_values = [summary[key].item() for summary in validation_history]
-        plt.plot(np.linspace(0, num_epochs-1, len(train_history)), train_values, label='train')
-        plt.plot(np.linspace(0, num_epochs-1, len(validation_history)), val_values, label='validation')
+        plt.plot(np.linspace(0, num_epochs - 1, len(train_history)), train_values, label='train')
+        plt.plot(np.linspace(0, num_epochs - 1, len(validation_history)), val_values, label='validation')
         # plt.ylim([-0.1, 1])
         plt.tight_layout()
         plt.legend()
@@ -431,5 +436,5 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', required=False)
     parser.add_argument('--dim_feedforward', action='store', type=int, help='dim_feedforward', required=False)
     parser.add_argument('--temporal_agg', action='store_true')
-    
+
     main(vars(parser.parse_args()))

@@ -28,7 +28,7 @@ def main(args):
     num_episodes = args['num_episodes']
     onscreen_render = args['onscreen_render']
     inject_noise = False
-    render_cam_name = 'angle'
+    render_cam_name = 'vis'
 
     if not os.path.isdir(dataset_dir):
         os.makedirs(dataset_dir, exist_ok=True)
@@ -79,9 +79,9 @@ def main(args):
             left_ctrl = PUPPET_GRIPPER_POSITION_NORMALIZE_FN(ctrl[0])
             right_ctrl = PUPPET_GRIPPER_POSITION_NORMALIZE_FN(ctrl[2])
             joint[6] = left_ctrl
-            joint[6+7] = right_ctrl
+            joint[6 + 7] = right_ctrl
 
-        subtask_info = episode[0].observation['env_state'].copy() # box pose at step 0
+        subtask_info = episode[0].observation['env_state'].copy()  # box pose at step 0
 
         # clear unused variables
         del env
@@ -91,7 +91,7 @@ def main(args):
         # setup the environment
         print('Replaying joint commands')
         env = make_sim_env(task_name)
-        BOX_POSE[0] = subtask_info # make sure the sim_env has the same object configurations as ee_sim_env
+        BOX_POSE[0] = subtask_info  # make sure the sim_env has the same object configurations as ee_sim_env
         ts = env.reset()
 
         episode_replay = [ts]
@@ -100,7 +100,7 @@ def main(args):
             ax = plt.subplot()
             plt_img = ax.imshow(ts.observation['images'][render_cam_name])
             plt.ion()
-        for t in range(len(joint_traj)): # note: this will increase episode length by 1
+        for t in range(len(joint_traj)):  # note: this will increase episode length by 1
             action = joint_traj[t]
             ts = env.step(action)
             episode_replay.append(ts)
@@ -178,12 +178,12 @@ def main(args):
     print(f'Saved to {dataset_dir}')
     print(f'Success: {np.sum(success)} / {len(success)}')
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
     parser.add_argument('--dataset_dir', action='store', type=str, help='dataset saving dir', required=True)
     parser.add_argument('--num_episodes', action='store', type=int, help='num_episodes', required=False)
     parser.add_argument('--onscreen_render', action='store_true')
-    
-    main(vars(parser.parse_args()))
 
+    main(vars(parser.parse_args()))
